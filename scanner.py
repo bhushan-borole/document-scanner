@@ -1,4 +1,5 @@
 from pyimagesearch import transform
+from PIL import Image
 import imutils
 import cv2
 import os
@@ -7,6 +8,7 @@ import itertools
 import numpy as np
 import math
 from scipy.spatial import distance as dist
+import pytesseract
 
 class Scanner():
 	def __init__(self, MIN_QUAD_AREA_RATIO=0.25, MAX_QUAD_ANGLE_RANGE=40):
@@ -224,6 +226,18 @@ class Scanner():
 		return screen_contour.reshape(4, 2)
 		#------------------------------------------------------------------
 
+	def apply_ocr(self, image):
+		# write the image to a temporary disk file to apply OCR
+		filename = '{}.png'.format(os.getpid())
+		cv2.imwrite(filename, image)
+
+		# laod the image as a PIL image
+		text = pytesseract.image_to_string(Image.open(filename))
+		os.remove(filename)
+
+		with open('document.docx', 'w+') as f:
+			f.write(text)
+			f.close()
 
 
 	def scan(self, image_path):
@@ -235,15 +249,18 @@ class Scanner():
 		original = image.copy()
 		rescaled_image = imutils.resize(image, height=int(NEW_HEIGHT))
 
+		print('Detecting Contours...')
 		screen_contour = self.get_contours(rescaled_image)
 
 		# apply perspective transformation
+		print('Applying Perspective Transformation...')
 		warped = transform.four_point_transform(original, screen_contour*ratio)
 
 		# convert the warped image to grayscale
 		gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
 
 		#sharpen the image
+		print('Sharpening the image...')
 		sharpen = cv2.GaussianBlur(gray, (0,0), 3)
 		sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
 
@@ -252,6 +269,11 @@ class Scanner():
 
 		# save the scanned image
 		thresh = cv2.resize(thresh, (0,0), fx=0.3, fy=0.3)
+
+		# applying OCR
+		print('Applying OCR')
+		self.apply_ocr(thresh)
+		
 		cv2.imshow('Scanned', thresh)
 		cv2.waitKey(0)
 
